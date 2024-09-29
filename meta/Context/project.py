@@ -8,7 +8,7 @@ WORKTREE = pathlib.Path(os.environ['WORK_DIR'])
 assert WORKTREE.is_dir()
 SRC_DIR = pathlib.Path(os.environ['WORK_SRC'])
 assert SRC_DIR.is_dir()
-PKG_DIR = SRC_DIR / 'Package'
+PKG_DIR = SRC_DIR / 'LanguageModels'
 assert PKG_DIR.is_dir()
 DOC_DIR = WORKTREE / 'docs'
 assert DOC_DIR.is_dir()

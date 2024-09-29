@@ -10,7 +10,7 @@ from collections.abc import Iterable, MappingView, Coroutine, Callable
 from collections import deque
 
 ### Package Imports
-import Package
+import LanguageModels
 ###
 
 logger = logging.getLogger(__name__)
