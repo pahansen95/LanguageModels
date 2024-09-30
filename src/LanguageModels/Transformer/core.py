@@ -28,9 +28,21 @@ class PositionalEncoding(nn.Module):
     self.encoding = self.encoding.unsqueeze(0)
   
   def forward(self, x):
-    batch_size, seq_length, _ = x.size()
+    # Add assertion to check input dimensions
+    assert len(x.size()) == 2, f"Expected input with 2 dimensions, got {x.size()}"
+    
+    batch_size, seq_length = x.size()
+    assert seq_length <= self.encoding.size(1), (
+      f"Input sequence length {seq_length} exceeds positional encoding max length {self.encoding.size(1)}"
+    )
+
     encoding = self.encoding[:, :seq_length, :].expand(batch_size, -1, -1).to(x.device)
-    return x + encoding
+    
+    # Ensure encoding matches expected dimensions
+    assert encoding.size() == (batch_size, seq_length, self.encoding.size(2)), (
+      f"Unexpected encoding size: {encoding.size()}, expected {(batch_size, seq_length, self.encoding.size(2))}"
+    )
+    return encoding
 
 class MultiHeadAttention(nn.Module):
   def __init__(self, d_model, num_heads):
