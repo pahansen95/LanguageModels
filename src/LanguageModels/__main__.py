@@ -10,7 +10,7 @@ from collections.abc import Iterable, MappingView, Coroutine, Callable
 from collections import deque
 
 ### Package Imports
-import LanguageModels
+import LanguageModels.Transformer.cli
 ###
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,8 @@ async def loop_entrypoint(
   
   ### Schedule that Tasks
   enabled_tasks: dict[str, Callable[[], Coroutine]] = {
-    'Foo': lambda: Package.Bar(bind_addr, quit_event)
+    # 'Foo': lambda: Package.Bar(bind_addr, quit_event)
+    'TestTransformer': lambda: LanguageModels.Transformer.cli.test_transformer()
   }
   disabled_tasks: dict[str, Callable[[], Coroutine]] = {}
   inflight_tasks: dict[str, asyncio.Task] = {}
@@ -54,10 +55,13 @@ async def loop_entrypoint(
       _t = inflight_tasks.pop(name)
       assert _t is t
       ### Handle the Task State
-      if (e := t.exception()) is not None: logger.error(
-        f'Task {name} raised an exception...\n' 
-        + '\n'.join(traceback.format_exception(type(e), value=e, tb=t.get_stack()))
-      )
+      if (e := t.exception()) is not None:
+        logger.error(
+          f'Task {name} raised an exception...\n' 
+          + '\n'.join(traceback.format_exception(type(e), value=e, tb=e.__traceback__))
+        )
+        logger.debug(f'Disabling Task b/c it errored out: {name}')
+        disabled_tasks[name] = enabled_tasks.pop(name)
       else:
         if t.cancelled(): logger.debug(f'Task {name} was cancelled')
         else: logger.debug(f'Task {name} completed')
