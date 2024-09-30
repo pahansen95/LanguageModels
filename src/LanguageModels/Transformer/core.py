@@ -28,7 +28,7 @@ class PositionalEncoding(nn.Module):
     self.encoding = self.encoding.unsqueeze(0)
   
   def forward(self, x):
-    return x + self.encoding[:, :x.size(1), :].to(x.device)
+    return x + self.encoding[:, :x.size(1), :].repeat(x.size(0), 1, 1).to(x.device)
 
 class MultiHeadAttention(nn.Module):
   def __init__(self, d_model, num_heads):
