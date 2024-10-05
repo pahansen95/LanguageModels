@@ -10,7 +10,10 @@ from collections.abc import Iterable, MappingView, Coroutine, Callable
 from collections import deque
 
 ### Package Imports
-import LanguageModels.Transformer.cli
+import LanguageModels.Transformer.cli, LanguageModels.ComputationalThoughts.cli
+from DevAgent.Utils.NatLang.chat import ChatInterface
+from DevAgent.Utils.NatLang.embed import EmbeddingInterface
+from DevAgent.Utils.NatLang import load_chat_interface, load_embed_interface
 ###
 
 logger = logging.getLogger(__name__)
@@ -18,11 +21,15 @@ logger = logging.getLogger(__name__)
 ### Runtime Boilerplate ###
 
 async def loop_entrypoint(
-  bind_addr: tuple[str, int],
+  # bind_addr: tuple[str, int],
+  prompt: str,
+  chat_interface: ChatInterface,
+  embedding_interface: EmbeddingInterface,
   quit_event: asyncio.Event,
 ) -> None:
   """The Entrypoint of the AsyncIO Loop"""
-  logger.debug(f"Entering Event Loop Entry Point: {bind_addr=}")
+  # logger.debug(f"Entering Event Loop Entry Point: {bind_addr=}")
+  logger.debug("Entering Event Loop Entry Point")
 
   # ### NOTE: Debugging
   # await quit_event.wait()
@@ -33,7 +40,12 @@ async def loop_entrypoint(
   ### Schedule that Tasks
   enabled_tasks: dict[str, Callable[[], Coroutine]] = {
     # 'Foo': lambda: Package.Bar(bind_addr, quit_event)
-    'TestTransformer': lambda: LanguageModels.Transformer.cli.test_transformer()
+    # 'TestTransformer': lambda: LanguageModels.Transformer.cli.test_transformer()
+    'ToT': lambda: LanguageModels.ComputationalThoughts.cli.train_of_thought(
+      prompt=prompt,
+      embedding_interface=embedding_interface,
+      chat_interface=chat_interface,
+    ),
   }
   disabled_tasks: dict[str, Callable[[], Coroutine]] = {}
   inflight_tasks: dict[str, asyncio.Task] = {}
@@ -85,7 +97,10 @@ def main(argv: Iterable[str], env: MappingView[str, str]) -> int:
 
   ### Set the Kwargs for the AIO Loop's Entrypoint
   loop_kwargs = {
-    'bind_addr': _parse_bind(flags.get('bind', '127.0.0.1:50080')) # Set a default
+    # 'bind_addr': _bind(flags.get('bind', '127.0.0.1:50080')), # Set a default
+    'prompt': args[0],
+    'chat_interface': load_chat_interface(**os.environ),
+    'embedding_interface': load_embed_interface(**os.environ),
   }
 
   ### Setup the AsyncIO Loop in another thread

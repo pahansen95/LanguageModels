@@ -18,20 +18,6 @@ The framework is designed to be flexible, allowing for future integration with d
 
 Semantic Latents are the fundamental data structure in our framework, representing thoughts and their semantic relationships.
 
-Structure:
-
-```python
-class SemanticNode:
-    def __init__(self, content: str):
-        self.content = content
-        self.embedding = None
-        self.children: List[SemanticNode] = []
-
-class SemanticLatent:
-    def __init__(self, root_content: str):
-        self.root = SemanticNode(root_content)
-```
-
 Key features:
 
 - Hierarchical organization of thoughts
@@ -82,35 +68,6 @@ Representation of Semantic Latents:
 - Tree-based structure with SemanticNode as the basic unit
 - Each node contains text content and an embedding vector
 
-Clustering and organization methods:
-
-- Modified Hierarchical Agglomerative Clustering (HAC)
-- Root-Anchored HAC respecting the original thought as the top-level node
-- Dynamic linkage criterion considering semantic similarity and depth
-
-Key algorithms:
-
-```python
-def add_to_hierarchy(self, new_node: SemanticNode):
-    best_parent = self._find_best_parent(self.root, new_node)
-    best_parent.children.append(new_node)
-
-def _find_best_parent(self, current_node: SemanticNode, new_node: SemanticNode) -> SemanticNode:
-    if not current_node.children:
-        return current_node
-    
-    similarities = [self._calculate_similarity(child, new_node) for child in current_node.children]
-    most_similar_child = current_node.children[np.argmax(similarities)]
-    
-    if max(similarities) > self._calculate_similarity(current_node, new_node):
-        return self._find_best_parent(most_similar_child, new_node)
-    else:
-        return current_node
-
-def _calculate_similarity(self, node1: SemanticNode, node2: SemanticNode) -> float:
-    return np.dot(node1.embedding, node2.embedding)
-```
-
 Centroid Movement approach:
 
 - Calculate cluster centroids using density volume distribution
@@ -122,25 +79,6 @@ Use of language models and embedding techniques:
 
 - Leveraging LLMs for generating thought transformations
 - Using embedding models (e.g., sentence transformers) for semantic representations
-
-Integration points:
-
-```python
-from DevAgent.Utils.NatLang import load_chat_interface, load_embed_interface
-
-chat = load_chat_interface()
-embed = load_embed_interface()
-
-def transform_thought(self, node: SemanticNode, directive: str) -> SemanticNode:
-    prompt = f"Based on the following thought and directive, generate a new thought:\nThought: {node.content}\nDirective: {directive}"
-    new_content = chat.chat(
-        {"role": "system", "content": "You are a thought transformer."},
-        {"role": "user", "content": prompt}
-    )
-    new_node = SemanticNode(new_content)
-    new_node.embedding = embed.embed(new_content)
-    return new_node
-```
 
 Future considerations for deep learning integration:
 
