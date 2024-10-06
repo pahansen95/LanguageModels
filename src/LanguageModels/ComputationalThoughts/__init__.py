@@ -37,10 +37,6 @@ class Pipeline(Generic[T]):
     self._break_iteration = break_iteration
     self._break_pipeline = break_pipeline
     self._aiter_cycle = 0
-
-  def __aiter__(self) -> AsyncIterator:
-    """Asynchronously iterate the pipeline; NOTE: this does not iterate over steps; it is 1 loop step"""
-    return self
   
   @property
   def name(self) -> str: return self._name
@@ -49,6 +45,11 @@ class Pipeline(Generic[T]):
   @property
   def break_iteration(self) -> Callable[[int, T], bool] | Callable[[int, T], Coroutine[None, None, bool]]:
     return self._break_iteration
+
+  def __aiter__(self) -> AsyncIterator:
+    """Asynchronously iterate the pipeline; NOTE: this does not iterate over steps; it is 1 loop step"""
+    self._aiter_cycle = 0 # reset the Cycle Count
+    return self
 
   async def __anext__(self) -> T:
     if self._aiter_cycle > 0 and self._break_pipeline(self._aiter_cycle, self._input): raise StopAsyncIteration
@@ -69,7 +70,7 @@ class Pipeline(Generic[T]):
           async for step_output in step(output):
             logger.debug(f'Pipline {step.name} Output...\n{step_output}')
             await asyncio.sleep(0)
-          output = step_output
+            output = step_output
         elif inspect.iscoroutinefunction(step): output = await step(output) # Async Function
         else: output = step(output) # Some Synchronous Callable
       if inspect.iscoroutinefunction(break_iteration):
@@ -99,62 +100,99 @@ class Decoder(Generic[T], Protocol):
 class Internalize(Pipeline[latent_t]):
   """A (Sub)Pipeline to Internalize some input latent"""
 
-  def __init__(self) -> None:
+  def __init__(self, chat_interface: ChatInterface, **kwargs) -> None:
     super().__init__(
       [
-        Think('Contemplate'),
-        inject_context,
-      ]
+        Contemplate(chat_interface=chat_interface),
+        # inject_context, # TODO
+        Contemplate(chat_interface=chat_interface),
+      ],
+      **kwargs
     )
 
 class Articulate(Pipeline[latent_t]):
   """A (Sub)Pipeline to Articulate in response to some latent"""
 
-  def __init__(self) -> None:
+  def __init__(self, chat_interface: ChatInterface, **kwargs) -> None:
+    self._chat_interface = chat_interface
     super().__init__(
-      [
-        Think('Articulate'),
-      ]
+      name='Articulate',
+      steps=[
+        Think(
+          "Introspect: How can you prime yourself to articulate & clearly communicate your thoughts?",
+          chat_interface,
+          name='ArticulateThink',
+        ),
+        self._articulate,
+      ],
+      **kwargs
     )
+
+  def _articulate(self, latent: latent_t) -> latent_t:
+    resp = self._chat_interface.chat(
+      {'role': 'user', 'content': 'Think through strategies for articulating your thoughts & clearly communicating them.'},
+      {'role': 'assistant', 'content': 'What will I be communicating?'},
+      {'role': 'user', 'content': latent.render()},
+      {'role': 'assistant', 'content': 'Is there a framework I can use to build a strategy?'},
+      {'role': 'user', 'content': 'Here is a basic framework you can extend: A) identify the audience; B) detail key takeaways; C) prioritize information by relevance; D) develop a three part structural outline. Now proceed to strategize.'},
+    )
+    latent.add_semantics(resp, 'articulation')
+    return latent
 
 class Think(Pipeline[latent_t]):
   """A (SubPipeline) to Think on some latent"""
   
-  def __init__(self, name: str, cognition: str, chat_interface: ChatInterface) -> None:
-    """cognition is some description, long or short, instructing how to think."""
+  def __init__(self, cognition: str, chat_interface: ChatInterface, **kwargs) -> None:
+    """A Pipeline that implements an internal thought process.
+
+    `cognition` is used as a meta-cognitive strategy for the pipeline.
+    """
     self._chat_interface = chat_interface
-    self._step_kwargs = [
-        { 'kind': 'context', 'prompt': 'What do I understand the context of my thoughts to be?' },
-        { 'kind': 'framing', 'prompt': 'What is my current Frame of Mind?' },
-        { 'kind': 'experiences', 'prompt': 'Can I recall any past experiences that relate?' },
-        { 'kind': 'personalKnowledge', 'prompt': 'Can I remember any relevant information or details? How confident am I in this knowledge\'s accuracy & precision?' },
-        { 'kind': 'insight', 'prompt': 'Do I have any novel ideas or different perspectives?' },
-    ]
     super().__init__(
-      name,
-      [
+      steps=[
         self._step_factory(cognition=cognition, **step_kwargs)
-        for step_kwargs in self._step_kwargs
-      ]
+        for step_kwargs in (
+            # { 'kind': 'initialThought', 'prompt': 'What is my immediate initial thought?' },
+            { 'kind': 'context', 'prompt': 'What do I understand the context to be?' },
+            { 'kind': 'audience', 'prompt': 'Who do I understand the audience to be?' },
+            { 'kind': 'framing', 'prompt': 'What is my expectation of the audience\'s Frame of Mind?' },
+            # { 'kind': 'framing', 'prompt': 'What is my current Frame of Mind?' },
+            # { 'kind': 'experiences', 'prompt': 'What relative past experiences do I recall?' },
+            { 'kind': 'personalKnowledge', 'prompt': 'What information or details of relevance can I recall?' },
+            { 'kind': 'insight', 'prompt': 'What novel ideas or different perspectives do I have, if any?' },
+            # { 'kind': 'planning', 'prompt': 'If I was to articulate a response, what would be the priority of information, from most to least important?' }
+        )
+      ],
+      **kwargs
     )
   
   def _step_factory(self, kind: str, cognition: str, prompt: str) -> Callable[..., Any] | Callable[..., Coroutine[None, None, Any]]:
     def _llm_chat(latent: latent_t) -> latent_t:
       resp = self._chat_interface.chat(
-        { 'role': 'user', 'content': 'You are actively thinking; this is your inner monologue.' },
-        { 'role': 'assistant', 'content': 'What are my current thoughts?' },
+        { 'role': 'user', 'content': 'Think through things.' },
+        { 'role': 'assistant', 'content': 'What should I consider?' },
         { 'role': 'user', 'content': latent.render() },
-        { 'role': 'assistant', 'content': 'What is my active cognition?' },
+        { 'role': 'assistant', 'content': 'How should I guide my cognition?' },
         { 'role': 'user', 'content': f'<meta kind=cognition>{cognition}</meta>', },
-        { 'role': 'assistant', 'content': 'What am I currently pondering?' },
+        { 'role': 'assistant', 'content': 'What specifically should I ponder?' },
         { 'role': 'user', 'content': f'<meta kind=ponderance>{prompt}</meta>', },
         { 'role': 'assistant', 'content': 'How should I respond?' },
-        { 'role': 'user', 'content': 'Embody your inner voice & reply directly to yourself.', },
+        { 'role': 'user', 'content': 'Your response should be cohesive, articulate & comprehensive. Provide details & examples and avoid circumlocution; speak plainly & with direct meaning & intent.', },
       )
       logger.debug(f'Think({self.name}) Step Output...\n{resp}')
       # TODO: Strip any leading/trailing Element Tags.
       latent.add_semantics(resp, kind)
       return latent
     return _llm_chat
+
+class Contemplate(Think):
+  """A Think Pipeline tuned for Contemplation & Thought Expansion"""
+  def __init__(self, **kwargs):
+    """A Think Pipeline tuned for Contemplation & Thought Expansion"""
+    super().__init__(
+      name=f'Contemplate',
+      cognition='Be contemplative, your goal is to explore your thoughts as much as possible & consider things from many angles.',
+      **kwargs,
+    )
 
 async def inject_context(latent: latent_t) -> latent_t: ...

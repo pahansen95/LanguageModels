@@ -26,6 +26,8 @@ class SemanticLatent:
   _: KW_ONLY
   data: dict[int, SemanticNode] = field(default_factory=dict)
   """The Semantic Data Constituting the Latent; keyed off it's hash value"""
+  log: list[int] = field(default_factory=list)
+  """The Order in which data is added"""
   graph: nx.DiGraph = field(default_factory=nx.DiGraph)
   """The Semantic Nodes as a Directed Graph"""
 
@@ -56,7 +58,7 @@ class SemanticLatent:
     assert max_sim != (-1, -1)
     return max_sim[1]
 
-  def add_semantics(self, content: str, kind: str):
+  def add_semantics(self, content: str, kind: str) -> SemanticLatent:
     """
     Adds semantic information of a certain kind to the Latent Hierarchy.
     
@@ -69,7 +71,7 @@ class SemanticLatent:
       content (str): The textual content to be added as semantic information.
 
     Returns:
-      int: The index of the newly added node.
+      SemanticLatent: Allows for chaining
     """
     if (content_id := hash(content)) in self.data: raise ValueError('Can\'t add the same semantic data more than once')
     node: SemanticNode = {
@@ -87,6 +89,9 @@ class SemanticLatent:
     else: # This is the root of the Semantic Latent Hierarchy
       self.data[content_id] = node
       self.graph.add_node(content_id, is_root=True)
+    self.log.append(content_id)
+
+    return self # For Chaining
 
   def organize(self):
     """Calculate the Hierarchy of the Semantic Information; replaces all current edges"""
